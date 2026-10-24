@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio  # Added to handle the sleep delays
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -26,31 +27,44 @@ MESSAGE_TEXT = (
 # --- BOT FUNCTIONS ---
 
 async def send_advertisement(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
-    """Sends the image, caption, and inline button."""
-    # Create the inline button
-    keyboard = [[InlineKeyboardButton("Join China Binary Session", url=CHANNEL_LINK)]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
+    """Sends the sequence: Text -> (10s wait) -> Image -> (5s wait) -> Button."""
     try:
-        # Open the image file locally from the server
+        # 1. Send the text message first
+        await context.bot.send_message(chat_id=chat_id, text=MESSAGE_TEXT)
+        logger.info(f"Step 1: Text sent to {chat_id}")
+
+        # 2. Wait 10 seconds
+        await asyncio.sleep(10)
+
+        # 3. Send the image
         with open(IMAGE_FILE, "rb") as photo_file:
-            await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=photo_file, # Pass the opened file object here
-                caption=MESSAGE_TEXT,
-                reply_markup=reply_markup
-            )
-        logger.info(f"Message sent successfully to chat_id: {chat_id}")
+            await context.bot.send_photo(chat_id=chat_id, photo=photo_file)
+        logger.info(f"Step 2: Image sent to {chat_id}")
+
+        # 4. Wait 5 seconds
+        await asyncio.sleep(5)
+
+        # 5. Send the link/button message
+        keyboard = [[InlineKeyboardButton("Join China Binary Session", url=CHANNEL_LINK)]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await context.bot.send_message(
+            chat_id=chat_id, 
+            text="👇 Click below to join the channel 👇", 
+            reply_markup=reply_markup
+        )
+        logger.info(f"Step 3: Button sent to {chat_id}")
+
     except FileNotFoundError:
-         logger.error(f"ERROR: Could not find '{IMAGE_FILE}'. Make sure it is uploaded to GitHub in the same folder as main.py")
+         logger.error(f"ERROR: Could not find '{IMAGE_FILE}'. Make sure it is uploaded to GitHub.")
     except Exception as e:
-        logger.error(f"Failed to send message to {chat_id}: {e}")
+        logger.error(f"Failed to send sequence to {chat_id}: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for the /start command."""
     chat_id = update.effective_chat.id
     
-    # 1. Send the initial message immediately
+    # 1. Trigger the sequence immediately
     await send_advertisement(chat_id, context)
 
     # 2. Set up a reminder every 2 hours
@@ -73,7 +87,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def reminder_callback(context: ContextTypes.DEFAULT_TYPE):
     """Callback function for the recurring job."""
     job = context.job
-    # Send the advertisement again as a reminder
+    # Send the advertisement sequence again as a reminder
     await send_advertisement(job.chat_id, context)
 
 # --- MAIN APPLICATION ---
