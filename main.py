@@ -8,10 +8,12 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION ---
-# Get token from environment variable (for Render)
+# Get token from environment variable (set in Render)
 TOKEN = os.environ.get("BOT_TOKEN")
-# Replace with the direct URL of your uploaded image
-IMAGE_URL = "YOUR_IMAGE_DIRECT_URL_HERE" 
+
+# The exact name of the image file you uploaded to GitHub
+IMAGE_FILE = "poster.jpg" 
+
 # The Telegram link for the button
 CHANNEL_LINK = "https://t.me/chinabinarysession"
 
@@ -30,14 +32,17 @@ async def send_advertisement(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     try:
-        # Send the photo with caption and button
-        await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=IMAGE_URL,
-            caption=MESSAGE_TEXT,
-            reply_markup=reply_markup
-        )
-        logger.info(f"Message sent to chat_id: {chat_id}")
+        # Open the image file locally from the server
+        with open(IMAGE_FILE, "rb") as photo_file:
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo_file, # Pass the opened file object here
+                caption=MESSAGE_TEXT,
+                reply_markup=reply_markup
+            )
+        logger.info(f"Message sent successfully to chat_id: {chat_id}")
+    except FileNotFoundError:
+         logger.error(f"ERROR: Could not find '{IMAGE_FILE}'. Make sure it is uploaded to GitHub in the same folder as main.py")
     except Exception as e:
         logger.error(f"Failed to send message to {chat_id}: {e}")
 
@@ -49,9 +54,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_advertisement(chat_id, context)
 
     # 2. Set up a reminder every 2 hours
-    # Check if a job already exists for this chat to avoid duplicates
     job_name = f"reminder_{chat_id}"
     current_jobs = context.job_queue.get_jobs_by_name(job_name)
+    
     if not current_jobs:
         # Run the job every 2 hours (7200 seconds)
         context.job_queue.run_repeating(
@@ -85,7 +90,7 @@ def main():
     # Register the /start command handler
     application.add_handler(CommandHandler("start", start))
 
-    # Run the bot (polling mode - suitable for Background Workers)
+    # Run the bot (polling mode)
     logger.info("Bot is starting...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
